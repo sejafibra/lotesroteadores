@@ -196,7 +196,7 @@ logoutBtn.addEventListener('click', async () => {
       qrScanner = new Html5Qrcode("reader");
       qrScanner.start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: 250 },
+        { fps: 15, qrbox: 350, aspectRatio: 1.0 },
         qrCodeMessage => {
           qrScanner.stop();
           processarQRCode(qrCodeMessage);
