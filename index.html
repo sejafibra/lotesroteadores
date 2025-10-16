@@ -12,7 +12,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-  <!-- jsQR (decodificador de QR Code via imagem) -->
+  <!-- jsQR -->
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
   <style>
@@ -22,7 +22,7 @@
     }
 
     .main-card {
-      max-width: 480px;
+      max-width: 520px;
       margin: 40px auto;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       padding-bottom: 20px;
@@ -68,6 +68,12 @@
       margin-top: 10px;
       font-weight: 600;
     }
+
+    .nav-tabs .nav-link.active {
+      background-color: #0d6efd;
+      color: white !important;
+      border: none;
+    }
   </style>
 </head>
 <body>
@@ -96,33 +102,65 @@
   <div class="card main-card d-none" id="mainCard">
     <button class="btn btn-danger btn-sm" id="logout">Sair</button>
     <img src="https://sejafibra.net/wp-content/uploads/2023/06/logonovofibra.png" alt="Logo Seja Fibra">
-    <div class="card-body text-center">
-      <h5 class="card-title mb-3">Leitor de QR Code via Imagem</h5>
 
-      <input type="file" id="fileInput" accept="image/*" class="form-control mb-3">
-      <canvas id="canvas" style="display:none;"></canvas>
-      <div id="listaSeries"></div>
+    <ul class="nav nav-tabs" id="tabs">
+      <li class="nav-item">
+        <a class="nav-link active" data-bs-toggle="tab" href="#cadastroTab">Cadastro de Lotes</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" data-bs-toggle="tab" href="#consultaTab">Consulta de Roteadores</a>
+      </li>
+    </ul>
 
-      <div class="mt-3">
-        <label class="form-label">Fornecedor</label>
-        <input type="text" id="fornecedor" class="form-control" placeholder="Ex: Distribuidor XPTO">
+    <div class="tab-content p-3">
+      <!-- Aba de Cadastro -->
+      <div class="tab-pane fade show active" id="cadastroTab">
+        <div class="text-center mb-3">
+          <h5>Leitor de QR Code via Imagem</h5>
+        </div>
+
+        <input type="file" id="fileInput" accept="image/*" class="form-control mb-3">
+        <canvas id="canvas" style="display:none;"></canvas>
+        <div id="listaSeries"></div>
+
+        <div class="mt-3">
+          <label class="form-label">Fornecedor</label>
+          <input type="text" id="fornecedor" class="form-control" placeholder="Ex: Distribuidor XPTO">
+        </div>
+
+        <div class="mt-3">
+          <label class="form-label">Data da Compra</label>
+          <input type="date" id="dataCompra" class="form-control">
+        </div>
+
+        <div class="d-grid mt-4">
+          <button class="btn btn-primary" id="salvar">Salvar no Firebase</button>
+        </div>
+
+        <div id="msgStatus" class="alerta"></div>
       </div>
 
-      <div class="mt-3">
-        <label class="form-label">Data da Compra</label>
-        <input type="date" id="dataCompra" class="form-control">
+      <!-- Aba de Consulta -->
+      <div class="tab-pane fade" id="consultaTab">
+        <div class="text-center mb-3">
+          <h5>Consultar Roteador</h5>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Número de Série</label>
+          <input type="text" id="codigoBusca" class="form-control" placeholder="Digite o número do roteador">
+        </div>
+        <div class="d-grid mb-3">
+          <button class="btn btn-primary" id="buscar">Buscar</button>
+        </div>
+        <div id="resultadoBusca" class="alerta"></div>
       </div>
-
-      <div class="d-grid mt-4">
-        <button class="btn btn-primary" id="salvar">Salvar no Firebase</button>
-      </div>
-
-      <div id="msgStatus" class="alerta"></div>
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
   <script>
-    // === CONFIGURAÇÃO FIREBASE ===
+    // === FIREBASE CONFIG ===
     const firebaseConfig = {
       apiKey: "AIzaSyBwGP70XejEow2Vuj2Z58EXCp_uhA1GhO4",
       authDomain: "roteadores-51ecd.firebaseapp.com",
@@ -154,6 +192,10 @@
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
 
+    const codigoBuscaInput = document.getElementById('codigoBusca');
+    const buscarBtn = document.getElementById('buscar');
+    const resultadoBuscaDiv = document.getElementById('resultadoBusca');
+
     let seriesLidas = [];
 
     // === LOGIN PERSISTENTE ===
@@ -171,7 +213,6 @@
       const email = emailInput.value.trim();
       const senha = senhaInput.value.trim();
       msgLogin.textContent = '';
-
       try {
         await auth.signInWithEmailAndPassword(email, senha);
       } catch (error) {
@@ -188,11 +229,10 @@
       }
     });
 
-    // === LEITURA DE QR CODE VIA IMAGEM (usando jsQR) ===
+    // === LEITURA DE QR CODE (jsQR) ===
     fileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-
       const reader = new FileReader();
       reader.onload = function(event) {
         const img = new Image();
@@ -202,14 +242,13 @@
           ctx.drawImage(img, 0, 0, img.width, img.height);
           const imageData = ctx.getImageData(0, 0, img.width, img.height);
           const code = jsQR(imageData.data, img.width, img.height);
-
           if (code) {
             processarQRCode(code.data);
             msgStatus.textContent = "QR Code lido com sucesso!";
             msgStatus.classList.remove("text-danger");
             msgStatus.classList.add("text-success");
           } else {
-            msgStatus.textContent = "Falha ao decodificar QR Code. Tente outra imagem.";
+            msgStatus.textContent = "Falha ao decodificar QR Code.";
             msgStatus.classList.add("text-danger");
           }
         };
@@ -232,13 +271,11 @@
     salvarBtn.addEventListener('click', async () => {
       const fornecedor = fornecedorInput.value.trim();
       const dataCompra = dataCompraInput.value;
-
       if (!fornecedor || !dataCompra || seriesLidas.length === 0) {
         msgStatus.textContent = "Preencha todos os campos e selecione a imagem com QR Code.";
         msgStatus.classList.add("text-danger");
         return;
       }
-
       try {
         for (const serie of seriesLidas) {
           await firebase.database().ref("roteadores/" + serie).set({
@@ -255,6 +292,35 @@
         console.error(error);
         msgStatus.textContent = "Erro ao salvar os dados.";
         msgStatus.classList.add("text-danger");
+      }
+    });
+
+    // === CONSULTA DE ROTEADOR ===
+    buscarBtn.addEventListener('click', async () => {
+      const codigo = codigoBuscaInput.value.trim();
+      resultadoBuscaDiv.textContent = '';
+      if (!codigo) {
+        resultadoBuscaDiv.textContent = "Digite um número de série para buscar.";
+        resultadoBuscaDiv.classList.add("text-danger");
+        return;
+      }
+      try {
+        const snap = await firebase.database().ref("roteadores/" + codigo).get();
+        if (snap.exists()) {
+          const dados = snap.val();
+          resultadoBuscaDiv.innerHTML = `
+            <div class='text-success'>
+              <p><strong>Fornecedor:</strong> ${dados.fornecedor}</p>
+              <p><strong>Data da compra:</strong> ${dados.data_compra}</p>
+            </div>`;
+        } else {
+          resultadoBuscaDiv.textContent = "Nenhum registro encontrado para esse número.";
+          resultadoBuscaDiv.classList.add("text-danger");
+        }
+      } catch (error) {
+        console.error(error);
+        resultadoBuscaDiv.textContent = "Erro ao buscar dados.";
+        resultadoBuscaDiv.classList.add("text-danger");
       }
     });
   </script>
