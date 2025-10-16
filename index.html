@@ -12,8 +12,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
-  <!-- QR Code Reader -->
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <!-- jsQR (decodificador de QR Code via imagem) -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 
   <style>
     body {
@@ -100,6 +100,7 @@
       <h5 class="card-title mb-3">Leitor de QR Code via Imagem</h5>
 
       <input type="file" id="fileInput" accept="image/*" class="form-control mb-3">
+      <canvas id="canvas" style="display:none;"></canvas>
       <div id="listaSeries"></div>
 
       <div class="mt-3">
@@ -150,6 +151,8 @@
     const dataCompraInput = document.getElementById('dataCompra');
     const salvarBtn = document.getElementById('salvar');
     const msgStatus = document.getElementById('msgStatus');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
 
     let seriesLidas = [];
 
@@ -185,25 +188,34 @@
       }
     });
 
-    // === LEITURA DE QR CODE VIA IMAGEM ===
+    // === LEITURA DE QR CODE VIA IMAGEM (usando jsQR) ===
     fileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
-      const qr = new Html5Qrcode("reader-temp");
-      try {
-        const result = await qr.scanFile(file, true);
-        processarQRCode(result);
-        msgStatus.textContent = "QR Code lido com sucesso!";
-        msgStatus.classList.remove("text-danger");
-        msgStatus.classList.add("text-success");
-      } catch (err) {
-        console.error("Erro na leitura:", err);
-        msgStatus.textContent = "Falha ao ler QR Code da imagem.";
-        msgStatus.classList.add("text-danger");
-      } finally {
-        qr.clear();
-      }
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0, img.width, img.height);
+          const imageData = ctx.getImageData(0, 0, img.width, img.height);
+          const code = jsQR(imageData.data, img.width, img.height);
+
+          if (code) {
+            processarQRCode(code.data);
+            msgStatus.textContent = "QR Code lido com sucesso!";
+            msgStatus.classList.remove("text-danger");
+            msgStatus.classList.add("text-success");
+          } else {
+            msgStatus.textContent = "Falha ao decodificar QR Code. Tente outra imagem.";
+            msgStatus.classList.add("text-danger");
+          }
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
     });
 
     function processarQRCode(texto) {
