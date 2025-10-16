@@ -9,10 +9,8 @@
 
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-
-
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
   <!-- QR Code Reader -->
   <script src="https://unpkg.com/html5-qrcode"></script>
@@ -28,6 +26,7 @@
       margin: 40px auto;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
       padding-bottom: 20px;
+      position: relative;
     }
 
     .main-card img {
@@ -131,18 +130,17 @@
     // === CONFIGURAÇÃO FIREBASE ===
     const firebaseConfig = {
       apiKey: "AIzaSyBwGP70XejEow2Vuj2Z58EXCp_uhA1GhO4",
-  authDomain: "roteadores-51ecd.firebaseapp.com",
-  databaseURL: "https://roteadores-51ecd-default-rtdb.firebaseio.com",
-  projectId: "roteadores-51ecd",
-  storageBucket: "roteadores-51ecd.firebasestorage.app",
-  messagingSenderId: "72370500395",
-  appId: "1:72370500395:web:c0321e074ea86189a7cb6e"
+      authDomain: "roteadores-51ecd.firebaseapp.com",
+      databaseURL: "https://roteadores-51ecd-default-rtdb.firebaseio.com",
+      projectId: "roteadores-51ecd",
+      storageBucket: "roteadores-51ecd.firebasestorage.app",
+      messagingSenderId: "72370500395",
+      appId: "1:72370500395:web:c0321e074ea86189a7cb6e"
     };
 
-    // Inicializa o Firebase (versão compat)
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.database();
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
 
     // === ELEMENTOS ===
     const loginCard = document.getElementById('loginCard');
@@ -163,43 +161,54 @@ const db = firebase.database();
     let qrScanner;
 
     // === LOGIN ===
-entrarBtn.addEventListener('click', async () => {
-  const email = emailInput.value.trim();
-  const senha = senhaInput.value.trim();
-  msgLogin.textContent = '';
+    entrarBtn.addEventListener('click', async () => {
+      const email = emailInput.value.trim();
+      const senha = senhaInput.value.trim();
+      msgLogin.textContent = '';
 
-  try {
-    await firebase.auth().signInWithEmailAndPassword(email, senha);
-    loginCard.classList.add('d-none');
-    mainCard.classList.remove('d-none');
-    iniciarLeitor();
-  } catch (error) {
-    console.error(error);
-    msgLogin.textContent = 'Falha no login. Verifique os dados.';
-  }
-});
+      try {
+        await firebase.auth().signInWithEmailAndPassword(email, senha);
+        loginCard.classList.add('d-none');
+        mainCard.classList.remove('d-none');
+        iniciarLeitor();
+      } catch (error) {
+        console.error(error);
+        msgLogin.textContent = 'Falha no login. Verifique os dados.';
+      }
+    });
 
-// === LOGOUT ===
-logoutBtn.addEventListener('click', async () => {
-  try {
-    await firebase.auth().signOut();
-    pararLeitor();
-    mainCard.classList.add('d-none');
-    loginCard.classList.remove('d-none');
-  } catch (error) {
-    console.error(error);
-  }
-});
+    // === LOGOUT ===
+    logoutBtn.addEventListener('click', async () => {
+      try {
+        await firebase.auth().signOut();
+        pararLeitor();
+        mainCard.classList.add('d-none');
+        loginCard.classList.remove('d-none');
+      } catch (error) {
+        console.error(error);
+      }
+    });
 
     // === LEITOR DE QR CODE ===
-    function iniciarLeitor() {
+    async function iniciarLeitor() {
+      try {
+        await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", focusMode: "continuous" } });
+      } catch (err) {
+        console.warn("Não foi possível ajustar foco automático:", err);
+      }
+
       qrScanner = new Html5Qrcode("reader");
+      const config = { fps: 15, qrbox: 350, aspectRatio: 1.0 };
+
       qrScanner.start(
         { facingMode: "environment" },
-        { fps: 15, qrbox: 350, aspectRatio: 1.0 },
+        config,
         qrCodeMessage => {
-          qrScanner.stop();
           processarQRCode(qrCodeMessage);
+          // Reinicia automaticamente após leitura
+          setTimeout(() => {
+            qrScanner.stop().then(() => iniciarLeitor());
+          }, 1500);
         },
         errorMessage => {}
       );
@@ -232,7 +241,7 @@ logoutBtn.addEventListener('click', async () => {
 
       try {
         for (const serie of seriesLidas) {
-          await firebase.set(firebase.ref(db, "roteadores/" + serie), {
+          await firebase.database().ref("roteadores/" + serie).set({
             fornecedor,
             data_compra: dataCompra
           });
@@ -243,6 +252,7 @@ logoutBtn.addEventListener('click', async () => {
         seriesLidas = [];
         atualizarLista();
       } catch (error) {
+        console.error(error);
         msgStatus.textContent = "Erro ao salvar os dados.";
         msgStatus.classList.add("text-danger");
       }
