@@ -163,28 +163,33 @@ const db = firebase.database();
     let qrScanner;
 
     // === LOGIN ===
-    entrarBtn.addEventListener('click', async () => {
-      const email = emailInput.value.trim();
-      const senha = senhaInput.value.trim();
-      msgLogin.textContent = '';
+entrarBtn.addEventListener('click', async () => {
+  const email = emailInput.value.trim();
+  const senha = senhaInput.value.trim();
+  msgLogin.textContent = '';
 
-      try {
-        await firebase.signInWithEmailAndPassword(auth, email, senha);
-        loginCard.classList.add('d-none');
-        mainCard.classList.remove('d-none');
-        iniciarLeitor();
-      } catch (error) {
-        msgLogin.textContent = 'Falha no login. Verifique os dados.';
-      }
-    });
+  try {
+    await firebase.auth().signInWithEmailAndPassword(email, senha);
+    loginCard.classList.add('d-none');
+    mainCard.classList.remove('d-none');
+    iniciarLeitor();
+  } catch (error) {
+    console.error(error);
+    msgLogin.textContent = 'Falha no login. Verifique os dados.';
+  }
+});
 
-    // === LOGOUT ===
-    logoutBtn.addEventListener('click', async () => {
-      await firebase.signOut(auth);
-      pararLeitor();
-      mainCard.classList.add('d-none');
-      loginCard.classList.remove('d-none');
-    });
+// === LOGOUT ===
+logoutBtn.addEventListener('click', async () => {
+  try {
+    await firebase.auth().signOut();
+    pararLeitor();
+    mainCard.classList.add('d-none');
+    loginCard.classList.remove('d-none');
+  } catch (error) {
+    console.error(error);
+  }
+});
 
     // === LEITOR DE QR CODE ===
     function iniciarLeitor() {
