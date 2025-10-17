@@ -47,7 +47,7 @@
     }
 
     #listaSeries {
-      max-height: 150px;
+      max-height: 200px;
       overflow-y: auto;
       background: #fff;
       border: 1px solid #ddd;
@@ -73,6 +73,13 @@
       background-color: #0d6efd;
       color: white !important;
       border: none;
+    }
+
+    .contador {
+      text-align: center;
+      margin-top: 5px;
+      font-size: 0.9rem;
+      color: #555;
     }
   </style>
 </head>
@@ -116,12 +123,21 @@
       <!-- Aba de Cadastro -->
       <div class="tab-pane fade show active" id="cadastroTab">
         <div class="text-center mb-3">
-          <h5>Leitor de QR Code via Imagem</h5>
+          <h5>Leitor e Cadastro Manual</h5>
         </div>
 
+        <!-- Upload QR -->
         <input type="file" id="fileInput" accept="image/*" class="form-control mb-3">
         <canvas id="canvas" style="display:none;"></canvas>
+
+        <!-- Cadastro Manual -->
+        <div class="input-group mb-3">
+          <input type="text" id="manualInput" maxlength="13" class="form-control" placeholder="Digite o número de série (13 dígitos)">
+          <button class="btn btn-success" id="addManual">Adicionar</button>
+        </div>
+
         <div id="listaSeries"></div>
+        <div class="contador" id="contadorItens">Itens no lote: 0</div>
 
         <div class="mt-3">
           <label class="form-label">Fornecedor</label>
@@ -189,9 +205,11 @@
     const dataCompraInput = document.getElementById('dataCompra');
     const salvarBtn = document.getElementById('salvar');
     const msgStatus = document.getElementById('msgStatus');
+    const manualInput = document.getElementById('manualInput');
+    const addManualBtn = document.getElementById('addManual');
+    const contadorItens = document.getElementById('contadorItens');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-
     const codigoBuscaInput = document.getElementById('codigoBusca');
     const buscarBtn = document.getElementById('buscar');
     const resultadoBuscaDiv = document.getElementById('resultadoBusca');
@@ -216,27 +234,20 @@
       try {
         await auth.signInWithEmailAndPassword(email, senha);
       } catch (error) {
-        console.error(error);
         msgLogin.textContent = 'Falha no login. Verifique os dados.';
       }
     });
 
-    logoutBtn.addEventListener('click', async () => {
-      try {
-        await auth.signOut();
-      } catch (error) {
-        console.error(error);
-      }
-    });
+    logoutBtn.addEventListener('click', () => auth.signOut());
 
     // === LEITURA DE QR CODE (jsQR) ===
-    fileInput.addEventListener('change', async (e) => {
+    fileInput.addEventListener('change', e => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
-      reader.onload = function(event) {
+      reader.onload = event => {
         const img = new Image();
-        img.onload = function() {
+        img.onload = () => {
           canvas.width = img.width;
           canvas.height = img.height;
           ctx.drawImage(img, 0, 0, img.width, img.height);
@@ -257,14 +268,38 @@
       reader.readAsDataURL(file);
     });
 
+    // === ADICIONAR MANUALMENTE ===
+    addManualBtn.addEventListener('click', () => {
+      const codigo = manualInput.value.trim();
+      if (codigo.length !== 13 || !/^\d+$/.test(codigo)) {
+        msgStatus.textContent = "O número de série deve conter exatamente 13 dígitos numéricos.";
+        msgStatus.classList.add("text-danger");
+        return;
+      }
+      if (seriesLidas.includes(codigo)) {
+        msgStatus.textContent = "Este número já foi adicionado.";
+        msgStatus.classList.add("text-danger");
+        return;
+      }
+      seriesLidas.push(codigo);
+      atualizarLista();
+      manualInput.value = "";
+      msgStatus.textContent = "Número adicionado com sucesso!";
+      msgStatus.classList.remove("text-danger");
+      msgStatus.classList.add("text-success");
+    });
+
+    // === ATUALIZA LISTA ===
+    function atualizarLista() {
+      listaSeriesDiv.innerHTML = seriesLidas.map((s, i) => `<div>${i + 1}. ${s}</div>`).join('');
+      contadorItens.textContent = `Itens no lote: ${seriesLidas.length}`;
+    }
+
+    // === PROCESSA LEITURA DE QR ===
     function processarQRCode(texto) {
       const linhas = texto.split(/\r?\n/).map(l => l.trim()).filter(l => l);
       seriesLidas = [...new Set([...seriesLidas, ...linhas])];
       atualizarLista();
-    }
-
-    function atualizarLista() {
-      listaSeriesDiv.innerHTML = seriesLidas.map(s => `<div>${s}</div>`).join('');
     }
 
     // === SALVAR NO FIREBASE ===
@@ -272,24 +307,20 @@
       const fornecedor = fornecedorInput.value.trim();
       const dataCompra = dataCompraInput.value;
       if (!fornecedor || !dataCompra || seriesLidas.length === 0) {
-        msgStatus.textContent = "Preencha todos os campos e selecione a imagem com QR Code.";
+        msgStatus.textContent = "Preencha todos os campos e adicione os números de série.";
         msgStatus.classList.add("text-danger");
         return;
       }
       try {
         for (const serie of seriesLidas) {
-          await firebase.database().ref("roteadores/" + serie).set({
-            fornecedor,
-            data_compra: dataCompra
-          });
+          await db.ref("roteadores/" + serie).set({ fornecedor, data_compra: dataCompra });
         }
-        msgStatus.textContent = "Dados salvos com sucesso!";
+        msgStatus.textContent = "Lote salvo com sucesso!";
         msgStatus.classList.remove("text-danger");
         msgStatus.classList.add("text-success");
         seriesLidas = [];
         atualizarLista();
       } catch (error) {
-        console.error(error);
         msgStatus.textContent = "Erro ao salvar os dados.";
         msgStatus.classList.add("text-danger");
       }
@@ -300,26 +331,16 @@
       const codigo = codigoBuscaInput.value.trim();
       resultadoBuscaDiv.textContent = '';
       if (!codigo) {
-        resultadoBuscaDiv.textContent = "Digite um número de série para buscar.";
+        resultadoBuscaDiv.textContent = "Digite um número de série.";
         resultadoBuscaDiv.classList.add("text-danger");
         return;
       }
-      try {
-        const snap = await firebase.database().ref("roteadores/" + codigo).get();
-        if (snap.exists()) {
-          const dados = snap.val();
-          resultadoBuscaDiv.innerHTML = `
-            <div class='text-success'>
-              <p><strong>Fornecedor:</strong> ${dados.fornecedor}</p>
-              <p><strong>Data da compra:</strong> ${dados.data_compra}</p>
-            </div>`;
-        } else {
-          resultadoBuscaDiv.textContent = "Nenhum registro encontrado para esse número.";
-          resultadoBuscaDiv.classList.add("text-danger");
-        }
-      } catch (error) {
-        console.error(error);
-        resultadoBuscaDiv.textContent = "Erro ao buscar dados.";
+      const snap = await db.ref("roteadores/" + codigo).get();
+      if (snap.exists()) {
+        const dados = snap.val();
+        resultadoBuscaDiv.innerHTML = `<div class='text-success'><p><strong>Fornecedor:</strong> ${dados.fornecedor}</p><p><strong>Data da compra:</strong> ${dados.data_compra}</p></div>`;
+      } else {
+        resultadoBuscaDiv.textContent = "Nenhum registro encontrado.";
         resultadoBuscaDiv.classList.add("text-danger");
       }
     });
