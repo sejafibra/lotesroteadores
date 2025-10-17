@@ -271,11 +271,11 @@
     // === ADICIONAR MANUALMENTE ===
     addManualBtn.addEventListener('click', () => {
       const codigo = manualInput.value.trim();
-      if (codigo.length !== 13 || !/^\d+$/.test(codigo)) {
-        msgStatus.textContent = "O número de série deve conter exatamente 13 dígitos numéricos.";
-        msgStatus.classList.add("text-danger");
-        return;
-      }
+      if (codigo.length !== 13) {
+  msgStatus.textContent = "O número de série deve conter exatamente 13 caracteres (letras ou números).";
+  msgStatus.classList.add("text-danger");
+  return;
+}
       if (seriesLidas.includes(codigo)) {
         msgStatus.textContent = "Este número já foi adicionado.";
         msgStatus.classList.add("text-danger");
